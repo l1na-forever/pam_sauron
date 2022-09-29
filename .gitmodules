@@ -1,0 +1,3 @@
+[submodule "deps/RealSenseID"]
+	path = deps/RealSenseID
+	url = https://github.com/IntelRealSense/RealSenseID

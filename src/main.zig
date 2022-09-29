@@ -1,38 +1,84 @@
 const std = @import("std");
-const pam = @cImport({
+const c = @cImport({
     @cInclude("security/pam_appl.h");
     @cInclude("security/pam_modules.h");
+    @cInclude("rsid_c/rsid_client.h");
+    @cInclude("rsid_c/rsid_status.h");
 });
 
-export fn pam_sm_setcred(_: *pam.pam_handle, _: i32, _: i32, _: [*]const u8) i32 {
-    // TODO - enroll here for PAM_ESTABLISH_CRED
-    // see also pam_sm_chauthtok for when password change is requested
-    // https://web.archive.org/web/20190523222819/https://fedetask.com/write-linux-pam-module/
-    return pam.PAM_SUCCESS;
-}
+const stdout = std.io.getStdOut().writer();
+const stderr = std.io.getStdErr().writer();
 
-export fn pam_sm_acct_mgmt(_: *pam.pam_handle, _: i32, _: i32, _: [*]const u8) i32 {
-    return pam.PAM_SUCCESS;
-}
+var pam_user: ?[*:0]const u8 = null;
+var authenticated: bool = false;
 
-export fn pam_sm_authenticate(handle: *pam.pam_handle, _: i32, _: i32, _: [*]const u8) i32 {
-    const stdout = std.io.getStdOut().writer();
-    var username: [*c]const u8 = undefined;
-    var pam_result: i32 = undefined;
+export fn pam_sm_authenticate(handle: *c.pam_handle, _: i32, _: i32, _: [*]const u8) i32 {
+    // Retrieve username (or prompt for one)
+    if (c.pam_get_user(handle, &pam_user, null) != c.PAM_SUCCESS) {
+        return c.PAM_AUTH_ERR;
+    }
+    stdout.print("Authenticating via RSID...\n", .{}) catch {};
 
-    pam_result = pam.pam_get_user(handle, &username, null);
-    if (pam_result != pam.PAM_SUCCESS) {
-        stdout.print("pam_get_user failed: {}\n", .{pam_result}) catch {};
-        return pam.PAM_AUTH_ERR;
+    // Silence RSID Library
+    c.rsid_set_log_clbk(rsid_log, c.RSID_LogLevel_Off, 0);
+
+    // Open authenticator serial connection
+    const serial_config: c.rsid_serial_config = .{ .port = "/dev/ttyACM0" };
+    const authenticator: *c.rsid_authenticator = c.rsid_create_authenticator() orelse return c.PAM_AUTH_ERR;
+    if (c.rsid_connect(authenticator, &serial_config) != c.RSID_Ok) {
+        stderr.print("Unable to initialize RSID\n", .{}) catch {};
+        return c.PAM_AUTH_ERR;
+    }
+    defer {
+        c.rsid_destroy_authenticator(authenticator);
     }
 
-    stdout.print("Authenticating '{s}'\n", .{username}) catch {};
-    return pam.PAM_SUCCESS;
+    // Create authentication request
+    const auth_args: c.rsid_auth_args = .{
+        .result_clbk = rsid_result_cb,
+        .hint_clbk = rsid_hint_cb,
+        .face_detected_clbk = null,
+        .ctx = null,
+    };
+    if (c.rsid_authenticate(authenticator, &auth_args) != c.RSID_Ok) {
+        stderr.print("Unable to authenticate with RSID\n", .{}) catch {};
+        return c.PAM_AUTH_ERR;
+    }
+
+    // The result callback method simply sets the "authenticated" flag,
+    // after comparing usernames.
+    if (authenticated) {
+        stdout.print("Authenticated '{s}'!\n", .{pam_user}) catch {};
+        return c.PAM_SUCCESS;
+    } else {
+        return c.PAM_AUTH_ERR;
+    }
 }
+
+fn rsid_result_cb(status: c.rsid_auth_status, user: ?[*:0]const u8, _: ?*anyopaque) callconv(.C) void {
+    // If we have a successful authentication, check the given username against
+    // the pam-provided username. sliceTo to convert sentinel-terminated
+    // pointer to a fat slice.
+    if (status == c.RSID_Auth_Success and std.mem.eql(u8, std.mem.sliceTo(user.?, 0), std.mem.sliceTo(pam_user.?, 0))) {
+        authenticated = true;
+    } else {
+        stderr.print("Authentication failed\n", .{}) catch {};
+    }
+}
+
+fn rsid_hint_cb(hint: c.rsid_auth_status, _: ?*anyopaque) callconv(.C) void {
+    stdout.print("Authentication hint: {s}\n", .{c.rsid_auth_status_str(hint)}) catch {};
+}
+
+fn rsid_log(_: c.rsid_log_level, _: [*c]const u8) callconv(.C) void {}
 
 // To install:
 // sudo cp target/debug/libpam_realsense.so /usr/lib/security/pam_realsense.so
 //
 // To use (try this form of auth), add to the target pam module (e.g., sudo):
 // auth sufficient pam_realsense.so
+
+// making realsense:
+// cmake -DRSID_DEBUG_CONSOLE=OFF .. && make -j
+// sudo cp lib/librsid_c.so /usr/lib
 

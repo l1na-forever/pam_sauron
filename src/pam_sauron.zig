@@ -12,6 +12,17 @@ const stderr = std.io.getStdErr().writer();
 var pam_user: ?[*:0]const u8 = null;
 var authenticated: bool = false;
 
+// Unused by this module
+export fn pam_sm_setcred(_: *c.pam_handle, _: i32, _: i32, _: [*]const u8) i32 {
+    return c.PAM_SUCCESS;
+}
+
+// Unused by this module
+export fn pam_sm_acct_mgmt(_: *c.pam_handle, _: i32, _: i32, _: [*]const u8) i32 {
+    return c.PAM_SUCCESS;
+}
+
+// Callback for authenticating a user
 export fn pam_sm_authenticate(handle: *c.pam_handle, _: i32, _: i32, _: [*]const u8) i32 {
     // Retrieve username (or prompt for one)
     if (c.pam_get_user(handle, &pam_user, null) != c.PAM_SUCCESS) {

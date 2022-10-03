@@ -82,14 +82,3 @@ fn rsid_hint_cb(hint: c.rsid_auth_status, _: ?*anyopaque) callconv(.C) void {
 }
 
 fn rsid_log(_: c.rsid_log_level, _: [*c]const u8) callconv(.C) void {}
-
-// To install:
-// sudo cp target/debug/libpam_realsense.so /usr/lib/security/pam_realsense.so
-//
-// To use (try this form of auth), add to the target pam module (e.g., sudo):
-// auth sufficient pam_realsense.so
-
-// making realsense:
-// cmake -DRSID_DEBUG_CONSOLE=OFF .. && make -j
-// sudo cp lib/librsid_c.so /usr/lib
-

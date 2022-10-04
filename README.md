@@ -2,6 +2,12 @@ pam_sauron 🌋🔒🪞
 ==
 The provided [PAM module](https://www.redhat.com/sysadmin/pluggable-authentication-modules-pam) can be used to introduce facial authentication as a PAM mode of authentication by making use of an Intel RealSense depth-sensing camera.
 
+
+https://user-images.githubusercontent.com/61861965/193917430-f35d8108-5ca9-4187-b869-2566104063be.mp4
+
+
+
+
 Requirements
 ==
 * A Linux system using [PAM](https://github.com/linux-pam/linux-pam/)
@@ -118,6 +124,18 @@ Troubleshooting
 My recommendation is to make sure everything seems to be working right with the RealSense samples/tools first. If the samples/tools aren't working, your camera's firmware is likely not flashed to the version corresponding to the library (see above instructions). Oh, also, the module is hardcoded to `/dev/ttyACM0`; if your device happens to *not* be on `/dev/ttyACM0`, fork the package and update `pam_sauron.zig` (or cut me a feature request :^).
 
 Still, this is niche enough you can probably just cut me an issue. No promises on wrangling RealSense issues, though.
+
+FAQ
+==
+Q: Can pam_sauron detect masks?
+--
+Yep:
+
+
+
+https://user-images.githubusercontent.com/61861965/193917403-51155dcd-2166-485a-bf9b-0fa37a9d9034.mp4
+
+
 
 License
 ==
